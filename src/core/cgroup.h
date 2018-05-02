@@ -18,6 +18,7 @@ typedef struct CGroupContext CGroupContext;
 typedef struct CGroupDeviceAllow CGroupDeviceAllow;
 typedef struct CGroupIODeviceWeight CGroupIODeviceWeight;
 typedef struct CGroupIODeviceLimit CGroupIODeviceLimit;
+typedef struct CGroupIODeviceLatency CGroupIODeviceLatency;
 typedef struct CGroupBlockIODeviceWeight CGroupBlockIODeviceWeight;
 typedef struct CGroupBlockIODeviceBandwidth CGroupBlockIODeviceBandwidth;
 
@@ -57,6 +58,12 @@ struct CGroupIODeviceLimit {
         uint64_t limits[_CGROUP_IO_LIMIT_TYPE_MAX];
 };
 
+struct CGroupIODeviceLatency {
+        LIST_FIELDS(CGroupIODeviceLatency, device_latencies);
+        char *path;
+        uint64_t target;
+};
+
 struct CGroupBlockIODeviceWeight {
         LIST_FIELDS(CGroupBlockIODeviceWeight, device_weights);
         char *path;
@@ -87,6 +94,7 @@ struct CGroupContext {
         uint64_t startup_io_weight;
         LIST_HEAD(CGroupIODeviceWeight, io_device_weights);
         LIST_HEAD(CGroupIODeviceLimit, io_device_limits);
+        LIST_HEAD(CGroupIODeviceLatency, io_device_latencies);
 
         uint64_t memory_low;
         uint64_t memory_high;
@@ -138,6 +146,7 @@ CGroupMask cgroup_context_get_mask(CGroupContext *c);
 void cgroup_context_free_device_allow(CGroupContext *c, CGroupDeviceAllow *a);
 void cgroup_context_free_io_device_weight(CGroupContext *c, CGroupIODeviceWeight *w);
 void cgroup_context_free_io_device_limit(CGroupContext *c, CGroupIODeviceLimit *l);
+void cgroup_context_free_io_device_latency(CGroupContext *c, CGroupIODeviceLatency *l);
 void cgroup_context_free_blockio_device_weight(CGroupContext *c, CGroupBlockIODeviceWeight *w);
 void cgroup_context_free_blockio_device_bandwidth(CGroupContext *c, CGroupBlockIODeviceBandwidth *b);
 

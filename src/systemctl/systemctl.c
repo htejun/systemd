@@ -4872,6 +4872,26 @@ static int print_property(const char *name, sd_bus_message *m, bool value, bool 
 
                         return 1;
 
+                }  else if (contents[0] == SD_BUS_TYPE_STRUCT_BEGIN &&
+                            streq(name, "IODeviceLatencyTarget")) {
+                        const char *path;
+                        uint64_t target;
+
+                        r = sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "(st)");
+                        if (r < 0)
+                                return bus_log_parse_error(r);
+
+                        while ((r = sd_bus_message_read(m, "(st)", &path, &target)) > 0)
+                                print_prop(name, "%s %"PRIu64, strna(path), target);
+                        if (r < 0)
+                                return bus_log_parse_error(r);
+
+                        r = sd_bus_message_exit_container(m);
+                        if (r < 0)
+                                return bus_log_parse_error(r);
+
+                        return 1;
+
                 } else if (contents[0] == SD_BUS_TYPE_BYTE && streq(name, "StandardInputData")) {
                         _cleanup_free_ char *h = NULL;
                         const void *p;

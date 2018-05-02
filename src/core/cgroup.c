@@ -127,6 +127,15 @@ void cgroup_context_free_io_device_limit(CGroupContext *c, CGroupIODeviceLimit *
         free(l);
 }
 
+void cgroup_context_free_io_device_latency(CGroupContext *c, CGroupIODeviceLatency *l) {
+        assert(c);
+        assert(l);
+
+        LIST_REMOVE(device_latencies, c->io_device_latencies, l);
+        free(l->path);
+        free(l);
+}
+
 void cgroup_context_free_blockio_device_weight(CGroupContext *c, CGroupBlockIODeviceWeight *w) {
         assert(c);
         assert(w);
@@ -153,6 +162,9 @@ void cgroup_context_done(CGroupContext *c) {
 
         while (c->io_device_limits)
                 cgroup_context_free_io_device_limit(c, c->io_device_limits);
+
+        while (c->io_device_latencies)
+                cgroup_context_free_io_device_latency(c, c->io_device_latencies);
 
         while (c->blockio_device_weights)
                 cgroup_context_free_blockio_device_weight(c, c->blockio_device_weights);
@@ -648,6 +660,28 @@ static unsigned cgroup_apply_io_device_limit(Unit *u, const char *dev_path, uint
         return n;
 }
 
+static unsigned cgroup_apply_io_device_latency(Unit *u, const char *dev_path, uint64_t target) {
+        char buf[DECIMAL_STR_MAX(dev_t)*2+2+7+DECIMAL_STR_MAX(uint64_t)+1];
+        dev_t dev;
+        int r;
+
+        r = lookup_block_device(dev_path, &dev);
+        if (r < 0)
+                return 0;
+
+        if (target != CGROUP_LIMIT_MAX)
+                xsprintf(buf, "%u:%u target=%" PRIu64 "\n", major(dev), minor(dev), target);
+        else
+                xsprintf(buf, "%u:%u target=max\n", major(dev), minor(dev));
+
+        r = cg_set_attribute("io", u->cgroup_path, "io.latency", buf);
+        if (r < 0)
+                log_unit_full(u, IN_SET(r, -ENOENT, -EROFS, -EACCES) ? LOG_DEBUG : LOG_WARNING, r,
+                              "Failed to set io.latency: %m");
+
+        return target != CGROUP_LIMIT_MAX;
+}
+
 static unsigned cgroup_apply_blkio_device_limit(Unit *u, const char *dev_path, uint64_t rbps, uint64_t wbps) {
         char buf[DECIMAL_STR_MAX(dev_t)*2+2+DECIMAL_STR_MAX(uint64_t)+1];
         dev_t dev;
@@ -819,6 +853,16 @@ static void cgroup_context_apply(
                                                           w->weight, weight, w->path);
 
                                         cgroup_apply_io_device_weight(u, w->path, weight);
+                                }
+                        }
+
+                        /* Apply latency targets and free ones without config. */
+                        if (has_io) {
+                                CGroupIODeviceLatency *l, *next;
+
+                                LIST_FOREACH_SAFE(device_latencies, l, next, c->io_device_latencies) {
+                                        if (!cgroup_apply_io_device_latency(u, l->path, l->target))
+                                                cgroup_context_free_io_device_latency(c, l);
                                 }
                         }
                 }
